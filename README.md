@@ -64,7 +64,7 @@ Press `Ctrl+C` to stop.
 Log files are written to `/tmp/traffic_user_<nic_id>_<uid>.log` in CSV format:
 
 ```
-direction,bytes,src_ip,dst_ip
+direction,bytes,src_ip,dst_ip,timestamp
 ```
 
 ### Fields
@@ -75,14 +75,15 @@ direction,bytes,src_ip,dst_ip
 | `bytes` | Packet size in bytes |
 | `src_ip` | Source IPv4 address |
 | `dst_ip` | Destination IPv4 address |
+| `timestamp` | Unix timestamp with nanosecond precision (seconds.nanoseconds) |
 
 ### Example Output
 
 ```csv
-out,52,192.168.1.100,8.8.8.8
-in,84,8.8.8.8,192.168.1.100
-out,1500,192.168.1.100,142.250.185.78
-in,1500,142.250.185.78,192.168.1.100
+out,52,192.168.1.100,8.8.8.8,1732985432.123456789
+in,84,8.8.8.8,192.168.1.100,1732985432.234567890
+out,1500,192.168.1.100,142.250.185.78,1732985433.345678901
+in,1500,142.250.185.78,192.168.1.100,1732985433.456789012
 ```
 
 ## How It Works

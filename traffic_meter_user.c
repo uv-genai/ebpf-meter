@@ -13,6 +13,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <time.h>
 
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
@@ -43,11 +44,16 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
     ip_to_str(e->src_ip, src, sizeof(src));
     ip_to_str(e->dst_ip, dst, sizeof(dst));
 
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+
     char filename[256];
     snprintf(filename, sizeof(filename), "/tmp/traffic_user_%s_%u.log", g_nic_id, e->uid);
     FILE *f = fopen(filename, "a");
     if (f) {
-        fprintf(f, "%s,%u,%s,%s\n", e->direction ? "out" : "in", e->bytes, src, dst);
+        fprintf(f, "%s,%u,%s,%s,%ld.%09ld\n",
+                e->direction ? "out" : "in", e->bytes, src, dst,
+                ts.tv_sec, ts.tv_nsec);
         fclose(f);
     }
     return 0;
