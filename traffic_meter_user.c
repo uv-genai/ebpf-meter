@@ -23,6 +23,13 @@ struct traffic_stats {
     __u32 dst_ip;
 };
 
+/* IPv6 stats */
+struct traffic_stats_v6 {
+    __u64 bytes;
+    unsigned __int128 src_ip;
+    unsigned __int128 dst_ip;
+};
+
 static volatile int exiting = 0;
 
 static void sig_handler(int sig) { exiting = 1; }
@@ -109,7 +116,17 @@ int main(int argc, char **argv)
 
     int map_fd = bpf_object__find_map_fd_by_name(obj, "uid_stats_map");
     if (map_fd < 0) {
-        fprintf(stderr, "Failed to find map fd\n");
+        fprintf(stderr, "Failed to find IPv4 map fd\n");
+        bpf_prog_detach(cgroup_fd, BPF_CGROUP_INET_EGRESS);
+        bpf_prog_detach(cgroup_fd, BPF_CGROUP_INET_INGRESS);
+        bpf_object__close(obj);
+        close(cgroup_fd);
+        return 1;
+    }
+
+    int map_fd_v6 = bpf_object__find_map_fd_by_name(obj, "uid_stats_v6_map");
+    if (map_fd_v6 < 0) {
+        fprintf(stderr, "Failed to find IPv6 map fd\n");
         bpf_prog_detach(cgroup_fd, BPF_CGROUP_INET_EGRESS);
         bpf_prog_detach(cgroup_fd, BPF_CGROUP_INET_INGRESS);
         bpf_object__close(obj);
@@ -140,6 +157,25 @@ int main(int argc, char **argv)
                 }
             }
             uid = next_uid;
+        }
+        // IPv6 processing
+        __u32 uid6 = 0, next_uid6;
+        struct traffic_stats_v6 val6;
+        while (bpf_map_get_next_key(map_fd_v6, &uid6, &next_uid6) == 0) {
+            if (bpf_map_lookup_elem(map_fd_v6, &next_uid6, &val6) == 0) {
+                char src6[INET6_ADDRSTRLEN], dst6[INET6_ADDRSTRLEN];
+                inet_ntop(AF_INET6, &val6.src_ip, src6, sizeof(src6));
+                inet_ntop(AF_INET6, &val6.dst_ip, dst6, sizeof(dst6));
+
+                char filename[256];
+                snprintf(filename, sizeof(filename), "/tmp/traffic_user_%s_%u.log", nic_id, next_uid6);
+                FILE *f = fopen(filename, "a");
+                if (f) {
+                    fprintf(f, "%llu,%s,%s\n", (unsigned long long)val6.bytes, src6, dst6);
+                    fclose(f);
+                }
+            }
+            uid6 = next_uid6;
         }
     }
 
