@@ -17,13 +17,16 @@
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
 
-struct traffic_stats {
-    __u64 bytes;
+struct traffic_event {
+    __u32 uid;
+    __u32 bytes;
     __u32 src_ip;
     __u32 dst_ip;
+    __u8 direction;
 };
 
 static volatile int exiting = 0;
+static const char *g_nic_id = "unknown";
 
 static void sig_handler(int sig) { exiting = 1; }
 
@@ -33,9 +36,26 @@ static void ip_to_str(__u32 ip, char *buf, size_t buflen)
     inet_ntop(AF_INET, &a, buf, buflen);
 }
 
+static int handle_event(void *ctx, void *data, size_t data_sz)
+{
+    struct traffic_event *e = data;
+    char src[INET_ADDRSTRLEN], dst[INET_ADDRSTRLEN];
+    ip_to_str(e->src_ip, src, sizeof(src));
+    ip_to_str(e->dst_ip, dst, sizeof(dst));
+
+    char filename[256];
+    snprintf(filename, sizeof(filename), "/tmp/traffic_user_%s_%u.log", g_nic_id, e->uid);
+    FILE *f = fopen(filename, "a");
+    if (f) {
+        fprintf(f, "%s,%u,%s,%s\n", e->direction ? "out" : "in", e->bytes, src, dst);
+        fclose(f);
+    }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
-    const char *nic_id = (argc > 2) ? argv[2] : "unknown";
+    g_nic_id = (argc > 2) ? argv[2] : "unknown";
     struct rlimit r = {RLIM_INFINITY, RLIM_INFINITY};
     if (setrlimit(RLIMIT_MEMLOCK, &r)) {
         perror("setrlimit");
@@ -107,9 +127,12 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    int map_fd = bpf_object__find_map_fd_by_name(obj, "uid_stats_map");
-    if (map_fd < 0) {
-        fprintf(stderr, "Failed to find map fd\n");
+    /* Set up ring buffer */
+    struct ring_buffer *rb = ring_buffer__new(
+        bpf_object__find_map_fd_by_name(obj, "events"),
+        handle_event, NULL, NULL);
+    if (!rb) {
+        fprintf(stderr, "Failed to create ring buffer\n");
         bpf_prog_detach(cgroup_fd, BPF_CGROUP_INET_EGRESS);
         bpf_prog_detach(cgroup_fd, BPF_CGROUP_INET_INGRESS);
         bpf_object__close(obj);
@@ -121,29 +144,11 @@ int main(int argc, char **argv)
     fflush(stdout);
 
     while (!exiting) {
-        sleep(5);
-        __u32 uid = 0, next_uid;
-        struct traffic_stats val;
-
-        while (bpf_map_get_next_key(map_fd, &uid, &next_uid) == 0) {
-            if (bpf_map_lookup_elem(map_fd, &next_uid, &val) == 0) {
-                char src[INET_ADDRSTRLEN], dst[INET_ADDRSTRLEN];
-                ip_to_str(val.src_ip, src, sizeof(src));
-                ip_to_str(val.dst_ip, dst, sizeof(dst));
-
-                char filename[256];
-                snprintf(filename, sizeof(filename), "/tmp/traffic_user_%s_%u.log", nic_id, next_uid);
-                FILE *f = fopen(filename, "a");
-                if (f) {
-                    fprintf(f, "%llu,%s,%s\n", (unsigned long long)val.bytes, src, dst);
-                    fclose(f);
-                }
-            }
-            uid = next_uid;
-        }
+        ring_buffer__poll(rb, 100);
     }
 
     /* Cleanup */
+    ring_buffer__free(rb);
     bpf_prog_detach(cgroup_fd, BPF_CGROUP_INET_EGRESS);
     bpf_prog_detach(cgroup_fd, BPF_CGROUP_INET_INGRESS);
     bpf_object__close(obj);
