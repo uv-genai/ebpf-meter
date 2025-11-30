@@ -132,7 +132,7 @@ int main(int argc, char **argv)
 
                 char filename[256];
                 snprintf(filename, sizeof(filename), "/tmp/traffic_user_%u.log", next_uid);
-                FILE *f = fopen(filename, "w");
+                FILE *f = fopen(filename, "a");
                 if (f) {
                     fprintf(f, "bytes=%llu src=%s dst=%s\n", (unsigned long long)val.bytes, src, dst);
                     fclose(f);
