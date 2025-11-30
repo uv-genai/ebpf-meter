@@ -99,7 +99,22 @@ in,1500,142.250.185.78,192.168.1.100,1732985433.456789012,1584,1552
 2. **User-Space Loader** (`traffic_meter_user.c`):
    - Loads and attaches the eBPF programs to the specified cgroup
    - Polls the ring buffer for events
-   - Writes each event to the appropriate per-user log file
+   - Passes events to pluggable output backend
+   - Default backend writes CSV to per-user log files
+
+## Architecture
+
+The output system uses a pluggable backend interface:
+
+```c
+struct output_backend {
+    int (*init)(void *config);
+    int (*write)(const struct traffic_record *rec);
+    void (*close)(void);
+};
+```
+
+To add new output targets (syslog, network socket, database, etc.), implement this interface and set `g_backend` to your implementation.
 
 ## Limitations
 
