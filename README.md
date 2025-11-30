@@ -102,7 +102,22 @@ in,1280,2607:f8b0:4004:800::200e,2001:db8::1,1732985434.678901234,2864,1632
    - Loads and attaches the eBPF programs (4 total: ingress/egress for IPv4 and IPv6)
    - Polls both ring buffers for events
    - Tracks cumulative bytes per UID for in/out directions
-   - Writes each event to the appropriate per-user log file
+   - Passes events to pluggable output backend
+   - Default backend writes CSV to per-user log files
+
+## Architecture
+
+The output system uses a pluggable backend interface:
+
+```c
+struct output_backend {
+    int (*init)(void *config);
+    int (*write)(const struct traffic_record *rec);
+    void (*close)(void);
+};
+```
+
+To add new output targets (syslog, network socket, database, etc.), implement this interface and set `g_backend` to your implementation.
 
 ## Limitations
 
