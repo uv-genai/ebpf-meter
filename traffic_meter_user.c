@@ -35,6 +35,7 @@ static void ip_to_str(__u32 ip, char *buf, size_t buflen)
 
 int main(int argc, char **argv)
 {
+    const char *nic_id = (argc > 2) ? argv[2] : "unknown";
     struct rlimit r = {RLIM_INFINITY, RLIM_INFINITY};
     if (setrlimit(RLIMIT_MEMLOCK, &r)) {
         perror("setrlimit");
@@ -131,7 +132,7 @@ int main(int argc, char **argv)
                 ip_to_str(val.dst_ip, dst, sizeof(dst));
 
                 char filename[256];
-                snprintf(filename, sizeof(filename), "/tmp/traffic_user_%u.log", next_uid);
+                snprintf(filename, sizeof(filename), "/tmp/traffic_user_%s_%u.log", nic_id, next_uid);
                 FILE *f = fopen(filename, "a");
                 if (f) {
                     fprintf(f, "%llu,%s,%s\n", (unsigned long long)val.bytes, src, dst);
