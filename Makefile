@@ -11,7 +11,7 @@ CPPFLAGS ?= -I/usr/include -I.
 CFLAGS ?= -O2 -g -Wall
 LIBS ?= -lbpf -lelf -lz
 
-all: $(USER_BIN)
+all: $(BPF_OBJ) $(USER_BIN)
 
 # Build BPF object file
 $(BPF_OBJ): $(BPF_SRC)
