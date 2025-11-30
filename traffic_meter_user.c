@@ -26,8 +26,36 @@ struct traffic_event {
     __u8 direction;
 };
 
+struct uid_stats {
+    __u32 uid;
+    __u64 total_in;
+    __u64 total_out;
+    struct uid_stats *next;
+};
+
+#define HASH_SIZE 1024
+static struct uid_stats *uid_hash[HASH_SIZE];
+
 static volatile int exiting = 0;
 static const char *g_nic_id = "unknown";
+
+static struct uid_stats *find_or_create_stats(__u32 uid)
+{
+    unsigned int idx = uid % HASH_SIZE;
+    struct uid_stats *s = uid_hash[idx];
+    while (s) {
+        if (s->uid == uid)
+            return s;
+        s = s->next;
+    }
+    s = calloc(1, sizeof(*s));
+    if (!s)
+        return NULL;
+    s->uid = uid;
+    s->next = uid_hash[idx];
+    uid_hash[idx] = s;
+    return s;
+}
 
 static void sig_handler(int sig) { exiting = 1; }
 
@@ -44,6 +72,15 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
     ip_to_str(e->src_ip, src, sizeof(src));
     ip_to_str(e->dst_ip, dst, sizeof(dst));
 
+    struct uid_stats *stats = find_or_create_stats(e->uid);
+    if (!stats)
+        return 0;
+
+    if (e->direction)
+        stats->total_out += e->bytes;
+    else
+        stats->total_in += e->bytes;
+
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
 
@@ -51,9 +88,11 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
     snprintf(filename, sizeof(filename), "/tmp/traffic_user_%s_%u.log", g_nic_id, e->uid);
     FILE *f = fopen(filename, "a");
     if (f) {
-        fprintf(f, "%s,%u,%s,%s,%ld.%09ld\n",
+        fprintf(f, "%s,%u,%s,%s,%ld.%09ld,%llu,%llu\n",
                 e->direction ? "out" : "in", e->bytes, src, dst,
-                ts.tv_sec, ts.tv_nsec);
+                ts.tv_sec, ts.tv_nsec,
+                (unsigned long long)stats->total_in,
+                (unsigned long long)stats->total_out);
         fclose(f);
     }
     return 0;
