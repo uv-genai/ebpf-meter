@@ -213,7 +213,7 @@ int traffic_meter_egress(struct __sk_buff *skb)
 
     /* Apply untracked IP filter – drop event if src or dst matches */
     /* Skip untracked IPs */
-    if (ipv4_is_untracked(e->src_ip) || ipv4_is_untracked(e->dst_ip)) {
+    if (ipv4_is_untracked(e->src_ip) && ipv4_is_untracked(e->dst_ip)) {
         bpf_ringbuf_discard(e, 0);
         return 1;
     }
@@ -272,7 +272,7 @@ int traffic_meter_ingress(struct __sk_buff *skb)
 
     /* Apply untracked IP filter – drop event if src or dst matches */
     /* Skip untracked IPs */
-    if (ipv4_is_untracked(e->src_ip) || ipv4_is_untracked(e->dst_ip)) {
+    if (ipv4_is_untracked(e->src_ip) && ipv4_is_untracked(e->dst_ip)) {
         bpf_ringbuf_discard(e, 0);
         return 1;
     }
@@ -331,7 +331,7 @@ int traffic_meter_egress_v6(struct __sk_buff *skb)
 
     /* Apply untracked IPv6 filter – drop event if src or dst matches */
     /* Skip untracked IPv6 IPs */
-    if (ipv6_is_untracked(e->src_ip) || ipv6_is_untracked(e->dst_ip)) {
+    if (ipv6_is_untracked(e->src_ip) && ipv6_is_untracked(e->dst_ip)) {
         bpf_ringbuf_discard(e, 0);
         return 1;
     }
@@ -390,7 +390,7 @@ int traffic_meter_ingress_v6(struct __sk_buff *skb)
 
     /* Apply untracked IPv6 filter – drop event if src or dst matches */
     /* Skip untracked IPv6 IPs */
-    if (ipv6_is_untracked(e->src_ip) || ipv6_is_untracked(e->dst_ip)) {
+    if (ipv6_is_untracked(e->src_ip) && ipv6_is_untracked(e->dst_ip)) {
         bpf_ringbuf_discard(e, 0);
         return 1;
     }

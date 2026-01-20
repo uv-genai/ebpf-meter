@@ -161,7 +161,7 @@ int main(int argc, char *argv[]) {
     }
     printf("};\n\n");
     // size
-    printf("static const int untracked_ipv4_cnt = %d\n\n", v4_cnt);
+    printf("static const int untracked_ipv4_cnt = %d;\n\n", v4_cnt);
 
     printf("static const struct ipv6_mask untracked_ipv6[] = {\n");
     for (int i = 0; i < v6_cnt; i++) {
@@ -173,7 +173,7 @@ int main(int argc, char *argv[]) {
         printf(" }, %u },\n", v6_list[i].prefix_len);
     }
     printf("};\n\n");
-    printf("static const int untracked_ipv6_cnt = %d\n\n", v6_cnt);
+    printf("static const int untracked_ipv6_cnt = %d;\n\n", v6_cnt);
 
     return 0;
 }
