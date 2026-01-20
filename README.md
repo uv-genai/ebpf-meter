@@ -116,7 +116,6 @@ To modify the ignored networks, edit the static arrays in `traffic_meter.bpf.c` 
    - Passes events to pluggable output backend
    - Default backend writes CSV to per-user log files
 
-## Architecture
 
 The output system uses a pluggable backend interface:
 
@@ -135,9 +134,37 @@ To add new output targets (syslog, network socket, database, etc.), implement th
 - Monitors cgroup-based traffic (user processes), not raw interface traffic
 - Requires cgroup v2
 
-## Helper Tool for Untracked IP Masks
+## IP based packet filtering
 
-A standalone utility `ipmask_tool` is provided to generate the static C arrays for untracked IPv4/IPv6 networks. It reads a plain‑text file where each line contains an IP address with `*` wildcards (e.g., `10.0.*.*` or `2001:db8::*`). Running the tool prints C definitions that can be copied into `traffic_meter.bpf.c`.
+It is possible to specify network masks of IP addresses not to be tracked.
+
+The file `untracked_masks.h` contains arrays of IPv4 and IPv6 network masks in network
+byte order (big endian) of addressess not to be tracked.
+
+Content of file `untracked_masks.h`
+
+```c
+static const struct ipv4_mask untracked_ipv4[] = {
+  { __builtin_bswap32(0x0a000000), __builtin_bswap32(0xff000000) }, // 10.0.0.0/8
+  { __builtin_bswap32(0xc0a80100), __builtin_bswap32(0xffffff00) }, // 192.168.1.0/24
+};
+
+static const struct ipv6_mask untracked_ipv6[] = {
+    { { 0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, 32 },
+    { { 0x20, 0x01, 0x0d, 0xb8, 0xab, 0xcd, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0, 0x00, 0x00 }, 112 },
+};
+```
+
+Use the included `ipmask_tool` to generate the the `untracked_masks.h` file from a list of IP
+addresses stored in a file using `*` as the wildcard; e.g.:
+
+`ip_list.txt`:
+```
+10.0.*.*
+192.168.1.*
+2001:db8::*
+2001:db8:abcd:1234:5678:9abc:def0:*
+```
 
 **Usage**
 

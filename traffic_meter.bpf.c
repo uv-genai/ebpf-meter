@@ -68,7 +68,7 @@ struct ipv6_mask {
  * Use the ipmask_tool utility to generate the ip_masks.h file from ip addresses like 192.168.*.*
  */
 
-#include "ip_masks.h"
+#include "untracked_masks.h"
 
 
 /* Helper to check if an IPv4 address (network byte order) is in the untracked list */
