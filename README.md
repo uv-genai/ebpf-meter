@@ -2,6 +2,9 @@
 
 A per-user network traffic monitoring tool using eBPF. Captures all IPv4 network traffic and logs it to per-user files with direction, bytes, and IP addresses.
 
+**Note**:The current active branch is `ipv6-support` which includes both IPv6 support and IP-based packet filtering to ignore packets exchanged between
+user specified endpoints.
+
 ## Requirements
 
 - Linux kernel 5.8+ (for ring buffer support)
