@@ -135,6 +135,20 @@ To add new output targets (syslog, network socket, database, etc.), implement th
 - Monitors cgroup-based traffic (user processes), not raw interface traffic
 - Requires cgroup v2
 
+## Helper Tool for Untracked IP Masks
+
+A standalone utility `ipmask_tool` is provided to generate the static C arrays for untracked IPv4/IPv6 networks. It reads a plain‑text file where each line contains an IP address with `*` wildcards (e.g., `10.0.*.*` or `2001:db8::*`). Running the tool prints C definitions that can be copied into `traffic_meter.bpf.c`.
+
+**Usage**
+
+```sh
+./ipmask_tool ip_list.txt > untracked_masks.h
+```
+
+Add the generated `untracked_masks.h` to your source or copy the arrays directly into the file.
+
+The tool is useful for maintaining the untracked networks without manually calculating bitmasks.
+
 ## License
 
 GPL (required for eBPF programs using GPL-only helpers)
