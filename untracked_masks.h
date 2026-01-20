@@ -1,11 +1,10 @@
+/* use these empty masks to track all traffic between all ip addresses */
 static const struct ipv4_mask untracked_ipv4[] = {
-    { __builtin_bswap32(0xa9000000), __builtin_bswap32(0xff000000) }, // 169.0.0.0
+    // add entries as needed
 };
-
-static const int untracked_ipv4_cnt = 1;
+static const int untracked_ipv4_cnt = 0;
 
 static const struct ipv6_mask untracked_ipv6[] = {
+    // add entries as needed
 };
-
 static const int untracked_ipv6_cnt = 0;
-
