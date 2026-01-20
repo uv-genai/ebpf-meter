@@ -18,7 +18,90 @@
 
 #include <linux/bpf.h>
 #include <bpf/bpf_helpers.h>
+
+/*
+ * Static list of IPv4 networks to ignore. Each entry contains a network address
+ * and a netmask in network byte order. Packets whose source OR destination IP
+ * matches any of these networks will be skipped.
+ */
+struct ipv4_mask {
+    __u32 net;   /* network address */
+    __u32 mask;  /* netmask */
+};
+
+/* Example entries (network byte order):
+ *   10.0.0.0/8   -> net = 0x0a000000, mask = 0xff000000
+ *   192.168.1.0/24 -> net = 0xc0a80100, mask = 0xffffff00
+ */
+static const struct ipv4_mask untracked_ipv4[] = {
+    { __builtin_bswap32(0x0a000000), __builtin_bswap32(0xff000000) }, // 10.0.0.0/8
+    { __builtin_bswap32(0xc0a80100), __builtin_bswap32(0xffffff00) }, // 192.168.1.0/24
+};
+static const int untracked_ipv4_cnt = sizeof(untracked_ipv4) / sizeof(untracked_ipv4[0]);
+
+/* Helper to check if an IPv4 address (network byte order) is in the untracked list */
+/*
+ * Check if an IPv4 address (network byte order) matches any entry in
+ * the untracked_ipv4 list. Returns 1 if the address should be ignored.
+ */
+static __always_inline int ipv4_is_untracked(__u32 ip) {
+    #pragma unroll
+    for (int i = 0; i < 8; i++) { // limit loop for BPF verifier; adjust as needed
+        if (i >= untracked_ipv4_cnt) break;
+        if ((ip & untracked_ipv4[i].mask) == untracked_ipv4[i].net)
+            return 1;
+    }
+    return 0;
+}
+
+/* IPv6 untracked network definition */
+struct ipv6_mask {
+    __u8 net[16];
+    __u8 prefix_len; // number of leading bits in mask
+};
+
+/* Example entries (network byte order):
+ *   2001:db8::/32 -> net = {0x20,0x01,0x0d,0xb8,0x00...}, prefix_len = 32
+ */
+static const struct ipv6_mask untracked_ipv6[] = {
+    // Add entries as needed
+};
+static const int untracked_ipv6_cnt = sizeof(untracked_ipv6) / sizeof(untracked_ipv6[0]);
+
+/*
+ * Check if an IPv6 address matches any entry in the untracked_ipv6 list.
+ * Returns 1 if the address should be ignored.
+ */
+static __always_inline int ipv6_is_untracked(const __u8 ip[16]) {
+    #pragma unroll
+    for (int i = 0; i < 8; i++) {
+        if (i >= untracked_ipv6_cnt) break;
+        const struct ipv6_mask *m = &untracked_ipv6[i];
+        int full_bytes = m->prefix_len / 8;
+        int remaining_bits = m->prefix_len % 8;
+        int match = 1;
+        for (int b = 0; b < full_bytes; b++) {
+            if (ip[b] != m->net[b]) { match = 0; break; }
+        }
+        if (match && remaining_bits) {
+            __u8 mask = (__u8)(0xFF << (8 - remaining_bits));
+            if ((ip[full_bytes] & mask) != (m->net[full_bytes] & mask))
+                match = 0;
+        }
+        if (match) return 1;
+    }
+    return 0;
+}
+
 #include <bpf/bpf_endian.h>
+
+/*
+ * eBPF traffic meter program.
+ * Captures per‑process network traffic (both IPv4 and IPv6) via cgroup_skb
+ * ingress/egress hooks, emitting events to user space through ring buffers.
+ * The code also supports static untracked IP/netmask lists to filter out traffic
+ * from or to specific networks.
+ */
 
 /*
  * IPv4 event structure sent to user space via ring buffer.
@@ -110,6 +193,13 @@ int traffic_meter_egress(struct __sk_buff *skb)
     bpf_skb_load_bytes(skb, 12, &e->src_ip, 4);
     bpf_skb_load_bytes(skb, 16, &e->dst_ip, 4);
 
+    /* Apply untracked IP filter – drop event if src or dst matches */
+    /* Skip untracked IPs */
+    if (ipv4_is_untracked(e->src_ip) || ipv4_is_untracked(e->dst_ip)) {
+        bpf_ringbuf_discard(e, 0);
+        return 1;
+    }
+
     /* Submit event to ring buffer for user space to consume */
     bpf_ringbuf_submit(e, 0);
 
@@ -161,6 +251,13 @@ int traffic_meter_ingress(struct __sk_buff *skb)
      */
     bpf_skb_load_bytes(skb, 12, &e->src_ip, 4);
     bpf_skb_load_bytes(skb, 16, &e->dst_ip, 4);
+
+    /* Apply untracked IP filter – drop event if src or dst matches */
+    /* Skip untracked IPs */
+    if (ipv4_is_untracked(e->src_ip) || ipv4_is_untracked(e->dst_ip)) {
+        bpf_ringbuf_discard(e, 0);
+        return 1;
+    }
 
     /* Submit event to ring buffer for user space to consume */
     bpf_ringbuf_submit(e, 0);
@@ -214,6 +311,13 @@ int traffic_meter_egress_v6(struct __sk_buff *skb)
     bpf_skb_load_bytes(skb, 8, &e->src_ip, 16);
     bpf_skb_load_bytes(skb, 24, &e->dst_ip, 16);
 
+    /* Apply untracked IPv6 filter – drop event if src or dst matches */
+    /* Skip untracked IPv6 IPs */
+    if (ipv6_is_untracked(e->src_ip) || ipv6_is_untracked(e->dst_ip)) {
+        bpf_ringbuf_discard(e, 0);
+        return 1;
+    }
+
     /* Submit event to ring buffer for user space to consume */
     bpf_ringbuf_submit(e, 0);
 
@@ -265,6 +369,13 @@ int traffic_meter_ingress_v6(struct __sk_buff *skb)
      */
     bpf_skb_load_bytes(skb, 8, &e->src_ip, 16);
     bpf_skb_load_bytes(skb, 24, &e->dst_ip, 16);
+
+    /* Apply untracked IPv6 filter – drop event if src or dst matches */
+    /* Skip untracked IPv6 IPs */
+    if (ipv6_is_untracked(e->src_ip) || ipv6_is_untracked(e->dst_ip)) {
+        bpf_ringbuf_discard(e, 0);
+        return 1;
+    }
 
     /* Submit event to ring buffer for user space to consume */
     bpf_ringbuf_submit(e, 0);
