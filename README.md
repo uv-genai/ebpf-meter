@@ -176,6 +176,11 @@ Add the generated `untracked_masks.h` to your source or copy the arrays directly
 
 The tool is useful for maintaining the untracked networks without manually calculating bitmasks.
 
+Note that, because loops are forbidden in eBPF kernels, a `#pragma unroll` directive is used to unroll the loop
+and the array length is a static constant. The maximum number of iterations to be considered for
+a full unrolling varies with the compiler and the compiler version and in some cases can be dynamic
+based on the analysis the compiler does of the code.
+
 ## License
 
 GPL (required for eBPF programs using GPL-only helpers)
