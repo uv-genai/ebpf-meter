@@ -3,7 +3,7 @@
 
 # Makefile for eBPF traffic meter
 
-BPF_SRC = traffic_meter.bpf.c
+BPF_SRC = traffic_meter.bpf.c ip_masks.h
 BPF_OBJ = traffic_meter.bpf.o
 USER_SRC = traffic_meter_user.c
 USER_BIN = traffic_meter_user

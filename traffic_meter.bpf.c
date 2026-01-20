@@ -34,30 +34,6 @@ struct ipv4_mask {
     __u32 mask;  /* netmask */
 };
 
-/* Example entries (network byte order):
- *   10.0.0.0/8   -> net = 0x0a000000, mask = 0xff000000
- *   192.168.1.0/24 -> net = 0xc0a80100, mask = 0xffffff00
- */
-static const struct ipv4_mask untracked_ipv4[] = {
-    { __builtin_bswap32(0x0a000000), __builtin_bswap32(0xff000000) }, // 10.0.0.0/8
-    { __builtin_bswap32(0xc0a80100), __builtin_bswap32(0xffffff00) }, // 192.168.1.0/24
-};
-static const int untracked_ipv4_cnt = sizeof(untracked_ipv4) / sizeof(untracked_ipv4[0]);
-
-/* Helper to check if an IPv4 address (network byte order) is in the untracked list */
-/*
- * Check if an IPv4 address (network byte order) matches any entry in
- * the untracked_ipv4 list. Returns 1 if the address should be ignored.
- */
-static __always_inline int ipv4_is_untracked(__u32 ip) {
-    #pragma unroll
-    for (int i = 0; i < 8; i++) { // limit loop for BPF verifier; adjust as needed
-        if (i >= untracked_ipv4_cnt) break;
-        if ((ip & untracked_ipv4[i].mask) == untracked_ipv4[i].net)
-            return 1;
-    }
-    return 0;
-}
 
 /* IPv6 untracked network definition */
 struct ipv6_mask {
@@ -65,13 +41,50 @@ struct ipv6_mask {
     __u8 prefix_len; // number of leading bits in mask
 };
 
+/* IP masks listing the ip addresses not to be tracked */
+
 /* Example entries (network byte order):
+ *   10.0.0.0/8   -> net = 0x0a000000, mask = 0xff000000
+ *   192.168.1.0/24 -> net = 0xc0a80100, mask = 0xffffff00
+ *
+ * static const struct ipv4_mask untracked_ipv4[] = {
+ *   { __builtin_bswap32(0x0a000000), __builtin_bswap32(0xff000000) }, // 10.0.0.0/8
+ *   { __builtin_bswap32(0xc0a80100), __builtin_bswap32(0xffffff00) }, // 192.168.1.0/24
+ * };
+ * static const int untracked_ipv4_cnt = sizeof(untracked_ipv4) / sizeof(untracked_ipv4[0]);
+*/
+
+/* 
+ * Example entries (network byte order):
  *   2001:db8::/32 -> net = {0x20,0x01,0x0d,0xb8,0x00...}, prefix_len = 32
+ *
+ static const struct ipv6_mask untracked_ipv6[] = {
+     // add entries as needed
+ };
+ static const int untracked_ipv6_cnt = sizeof(untracked_ipv6) / sizeof(untracked_ipv6[0]);
+*/
+
+/*
+ * Use the ipmask_tool utility to generate the ip_masks.h file from ip addresses like 192.168.*.*
  */
-static const struct ipv6_mask untracked_ipv6[] = {
-    // Add entries as needed
-};
-static const int untracked_ipv6_cnt = sizeof(untracked_ipv6) / sizeof(untracked_ipv6[0]);
+
+#include "ip_masks.h"
+
+
+/* Helper to check if an IPv4 address (network byte order) is in the untracked list */
+/*
+ * Check if an IPv4 address (network byte order) matches any entry in
+ * the untracked_ipv4 list. Returns 1 if the address should be ignored.
+ */
+static __always_inline int ipv4_is_untracked(__u32 ip) {
+    #pragma unroll /* no loops allowed */
+    for (int i = 0; i != untracked_ipv4_cnt; i++) { 
+        //if (i >= untracked_ipv4_cnt) break;
+        if ((ip & untracked_ipv4[i].mask) == untracked_ipv4[i].net)
+            return 1;
+    }
+    return 0;
+}
 
 /*
  * Check if an IPv6 address matches any entry in the untracked_ipv6 list.
@@ -79,8 +92,8 @@ static const int untracked_ipv6_cnt = sizeof(untracked_ipv6) / sizeof(untracked_
  */
 static __always_inline int ipv6_is_untracked(const __u8 ip[16]) {
     #pragma unroll
-    for (int i = 0; i < 8; i++) {
-        if (i >= untracked_ipv6_cnt) break;
+    for (int i = 0; i != untracked_ipv6_cnt; i++) {
+        //if (i >= untracked_ipv6_cnt) break;
         const struct ipv6_mask *m = &untracked_ipv6[i];
         int full_bytes = m->prefix_len / 8;
         int remaining_bits = m->prefix_len % 8;
@@ -99,30 +112,6 @@ static __always_inline int ipv6_is_untracked(const __u8 ip[16]) {
 }
 
 #include <bpf/bpf_endian.h>
-
-/*
- * Original untracked IP lists (commented out) – kept for reference.
- */
-#if 0
-/* IPv4 untracked list */
-static const struct ipv4_mask untracked_ipv4[] = {
-    { __builtin_bswap32(0x0a000000), __builtin_bswap32(0xff000000) }, // 10.0.0.0/8
-    { __builtin_bswap32(0xc0a80100), __builtin_bswap32(0xffffff00) }, // 192.168.1.0/24
-};
-static const int untracked_ipv4_cnt = sizeof(untracked_ipv4) / sizeof(untracked_ipv4[0]);
-
-/* IPv6 untracked list */
-static const struct ipv6_mask untracked_ipv6[] = {
-    // Add entries as needed
-};
-static const int untracked_ipv6_cnt = sizeof(untracked_ipv6) / sizeof(untracked_ipv6[0]);
-#endif
-
-/* Default: track all IPs (empty untracked lists) */
-static const struct ipv4_mask untracked_ipv4[] = { };
-static const int untracked_ipv4_cnt = 0;
-static const struct ipv6_mask untracked_ipv6[] = { };
-static const int untracked_ipv6_cnt = 0;
 
 /*
  * eBPF traffic meter program.
