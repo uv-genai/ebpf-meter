@@ -1,3 +1,6 @@
+# Author: Ugo Varetto - ugo.varetto@csiro.au
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 # Makefile for eBPF traffic meter
 
 BPF_SRC = traffic_meter.bpf.c

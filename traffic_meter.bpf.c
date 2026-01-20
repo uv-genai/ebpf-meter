@@ -1,4 +1,9 @@
 /*
+ * Author: Ugo Varetto - ugo.varetto@csiro.au
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
+
+/*
  * traffic_meter.bpf.c - eBPF program to meter network traffic per UID.
  *
  * This program attaches to cgroup_skb hooks to capture all IPv4 and IPv6

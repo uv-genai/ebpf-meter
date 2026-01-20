@@ -1,4 +1,9 @@
 /*
+ * Author: Ugo Varetto - ugo.varetto@csiro.au
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
+
+/*
  * ipmask_tool.c - Helper utility to convert wildcard IP lists to C bitmask arrays.
  *
  * Usage: ipmask_tool <input_file>

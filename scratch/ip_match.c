@@ -1,3 +1,8 @@
+/*
+ * Author: Ugo Varetto - ugo.varetto@csiro.au
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
+
 #include <stdbool.h>
 #include <stddef.h>   // for size_t
 #include <stdint.h>

@@ -1,4 +1,9 @@
 /*
+ * Author: Ugo Varetto - ugo.varetto@csiro.au
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
+
+/*
  * traffic_meter_user.c - User-space loader for traffic_meter eBPF program.
  *
  * This program:
