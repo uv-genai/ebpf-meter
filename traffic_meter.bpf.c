@@ -101,6 +101,30 @@ static __always_inline int ipv6_is_untracked(const __u8 ip[16]) {
 #include <bpf/bpf_endian.h>
 
 /*
+ * Original untracked IP lists (commented out) – kept for reference.
+ */
+#if 0
+/* IPv4 untracked list */
+static const struct ipv4_mask untracked_ipv4[] = {
+    { __builtin_bswap32(0x0a000000), __builtin_bswap32(0xff000000) }, // 10.0.0.0/8
+    { __builtin_bswap32(0xc0a80100), __builtin_bswap32(0xffffff00) }, // 192.168.1.0/24
+};
+static const int untracked_ipv4_cnt = sizeof(untracked_ipv4) / sizeof(untracked_ipv4[0]);
+
+/* IPv6 untracked list */
+static const struct ipv6_mask untracked_ipv6[] = {
+    // Add entries as needed
+};
+static const int untracked_ipv6_cnt = sizeof(untracked_ipv6) / sizeof(untracked_ipv6[0]);
+#endif
+
+/* Default: track all IPs (empty untracked lists) */
+static const struct ipv4_mask untracked_ipv4[] = { };
+static const int untracked_ipv4_cnt = 0;
+static const struct ipv6_mask untracked_ipv6[] = { };
+static const int untracked_ipv6_cnt = 0;
+
+/*
  * eBPF traffic meter program.
  * Captures per‑process network traffic (both IPv4 and IPv6) via cgroup_skb
  * ingress/egress hooks, emitting events to user space through ring buffers.
