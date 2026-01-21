@@ -30,6 +30,7 @@ make clean && make
 This produces:
 - `traffic_meter.bpf.o` - eBPF program object
 - `traffic_meter_user` - User-space loader
+- `ipmask_tool` - generates bitmasks of untracked networks in network byte order, see [below](#ipfilter)
 
 ## Usage
 
@@ -90,56 +91,22 @@ out,80,2001:db8::1,2607:f8b0:4004:800::200e,1732985434.567890123,1584,1632
 in,1280,2607:f8b0:4004:800::200e,2001:db8::1,1732985434.678901234,2864,1632
 ```
 
-## How It Works
 
-### Untracked IP Filtering (new)
+<a name="ipfilter"></a>
+## Untracked IP Filtering 
 
-The eBPF program now includes a static list of IPv4 and IPv6 network masks that are **ignored** during monitoring. These masks are defined in `traffic_meter.bpf.c` as `untracked_ipv4` and `untracked_ipv6` arrays. For each packet the program checks whether the source **or** destination address matches any of the configured networks. If a match is found, the event is discarded with `bpf_ringbuf_discard()` and the packet is allowed to continue without being logged.
+The eBPF program includes a static list of IPv4 and IPv6 network masks that are **ignored** during monitoring. 
+
+These masks are defined in the file `untracked_masks.h` included by`traffic_meter.bpf.c` as `untracked_ipv4` and `untracked_ipv6` arrays. 
+
+For each packet the program checks whether the source **and** destination address matches any of the configured networks.
+If a match is found, the event is discarded with `bpf_ringbuf_discard()` and the packet is allowed to continue without being logged.
 
 * **IPv4** – Each entry stores a network address and a netmask in network byte order. Example entries include `10.0.0.0/8` and `192.168.1.0/24`.
-* **IPv6** – Each entry stores a 16‑byte network prefix and a prefix length. The helper `ipv6_is_untracked()` performs a byte‑wise comparison respecting the prefix length.
+* **IPv6** – Each entry stores a 16‑byte network prefix and a prefix length. The helper function `ipv6_is_untracked()` performs a byte‑wise comparison respecting the prefix length.
 
-To modify the ignored networks, edit the static arrays in `traffic_meter.bpf.c` and rebuild the project (`make clean && make`). This allows you to tailor the monitoring to exclude internal or otherwise irrelevant traffic.
-
-## Architecture
-
-1. **eBPF Program** (`traffic_meter.bpf.c`):
-   - Attaches to `cgroup_skb/egress` and `cgroup_skb/ingress` hooks for both IPv4 and IPv6
-   - Uses `bpf_get_socket_uid()` to identify the socket owner (UID)
-   - Extracts source/destination IPs from IP headers
-   - Sends events to user space via separate ring buffers for IPv4 and IPv6
-
-2. **User-Space Loader** (`traffic_meter_user.c`):
-   - Loads and attaches the eBPF programs (4 total: ingress/egress for IPv4 and IPv6)
-   - Polls both ring buffers for events
-   - Tracks cumulative bytes per UID for in/out directions
-   - Passes events to pluggable output backend
-   - Default backend writes CSV to per-user log files
-
-
-The output system uses a pluggable backend interface:
-
-```c
-struct output_backend {
-    int (*init)(void *config);
-    int (*write)(const struct traffic_record *rec);
-    void (*close)(void);
-};
-```
-
-To add new output targets (syslog, network socket, database, etc.), implement this interface and set `g_backend` to your implementation.
-
-## Limitations
-
-- Monitors cgroup-based traffic (user processes), not raw interface traffic
-- Requires cgroup v2
-
-## IP based packet filtering
-
-It is possible to specify network masks of IP addresses not to be tracked.
-
-The file `untracked_masks.h` contains arrays of IPv4 and IPv6 network masks in network
-byte order (big endian) of addressess not to be tracked.
+To modify the ignored networks, edit the static arrays in `untracked_masks.h` and rebuild the project (`make clean && make`). 
+This allows you to tailor the monitoring to exclude internal or otherwise irrelevant traffic.
 
 Content of file `untracked_masks.h`
 
@@ -172,14 +139,42 @@ addresses stored in a file using `*` as the wildcard; e.g.:
 ./ipmask_tool ip_list.txt > untracked_masks.h
 ```
 
-Add the generated `untracked_masks.h` to your source or copy the arrays directly into the file.
-
 The tool is useful for maintaining the untracked networks without manually calculating bitmasks.
 
 Note that, because loops are forbidden in eBPF kernels, a `#pragma unroll` directive is used to unroll the loop
 and the array length is a static constant. The maximum number of iterations to be considered for
 a full unrolling varies with the compiler and the compiler version and in some cases can be dynamic
 based on the analysis the compiler does of the code.
+
+
+## Architecture
+
+1. **eBPF Program** (`traffic_meter.bpf.c`):
+   - Attaches to `cgroup_skb/egress` and `cgroup_skb/ingress` hooks for both IPv4 and IPv6
+   - Uses `bpf_get_socket_uid()` to identify the socket owner (UID)
+   - Extracts source/destination IPs from IP headers
+   - Sends events to user space via separate ring buffers for IPv4 and IPv6
+
+2. **User-Space Loader** (`traffic_meter_user.c`):
+   - Loads and attaches the eBPF programs (4 total: ingress/egress for IPv4 and IPv6)
+   - Polls both ring buffers for events
+   - Tracks cumulative bytes per UID for in/out directions
+   - Passes events to pluggable output backend
+   - Default backend writes CSV to per-user log files
+
+
+The output system uses a pluggable backend interface:
+
+```c
+struct output_backend {
+    int (*init)(void *config);
+    int (*write)(const struct traffic_record *rec);
+    void (*close)(void);
+};
+```
+
+To add new output targets (syslog, network socket, database, etc.), implement this interface and set `g_backend` to your implementation.
+
 
 ## License
 
